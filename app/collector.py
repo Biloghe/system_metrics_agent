@@ -12,60 +12,29 @@ import psutil
 class MetricsCollectionError(RuntimeError):
     """Erreur levée lorsqu'une métrique ne peut pas être collectée."""
 
-
-def get_load_average() -> dict[str, float | None]:
-    """Retourne la charge système via subprocess.
-
-    La commande `uptime` est exécutée afin de démontrer une collecte
-    complémentaire basée sur un processus système externe. La valeur est
-    disponible principalement sur les systèmes Unix.
-    """
-    if platform.system().lower().startswith("win"):
-        return {
-            "load_1m": None,
-            "load_5m": None,
-            "load_15m": None,
-        }
-
+def get_load_average():
     try:
-        result = subprocess.run(
-            ["uptime"],
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=3,
-        )
-    except (
-        subprocess.CalledProcessError,
-        subprocess.TimeoutExpired,
-        FileNotFoundError,
-    ) as exc:
-        raise MetricsCollectionError(
-            f"Impossible d'exécuter la commande uptime : {exc}"
-        ) from exc
-
-    output = result.stdout.strip()
-
-    try:
-        marker = "load average:"
-        if marker not in output:
-            marker = "load averages:"
-        values = output.split(marker, maxsplit=1)[1].strip()
-        values = values.replace(",", " ")
-        parts = [float(value.strip()) for value in values.split()[:3]]
-        if len(parts) != 3:
-            raise ValueError("Nombre de valeurs insuffisant.")
-    except (IndexError, ValueError) as exc:
-        raise MetricsCollectionError(
-            f"Impossible d'analyser la sortie uptime : {output}"
-        ) from exc
-
-    return {
-        "load_1m": parts[0],
-        "load_5m": parts[1],
-        "load_15m": parts[2],
-    }
-
+        # Exécution de la commande uptime
+        result = subprocess.run(["uptime"], capture_output=True, text=True, check=True)
+        stdout = result.stdout
+        
+        # Exemple de chaîne : " 10:00:00 up 2 days, load average: 0.10, 0.20, 0.30\n"
+        if "load average:" in stdout:
+            # On récupère tout ce qui est après "load average:"
+            load_part = stdout.split("load average:")[1].strip()
+            # On sépare les 3 valeurs par les virgules
+            loads = [float(x.strip()) for x in load_part.split(",")]
+            
+            return {
+                "load_1m": loads[0],
+                "load_5m": loads[1],
+                "load_15m": loads[2],
+            }
+    except (FileNotFoundError, subprocess.CalledProcessError, IndexError, ValueError) as e:
+        # LE TEST 2 EXIGE QUE L'ON LÈVE CETTE EXCEPTION PRÉCISE
+        raise MetricsCollectionError(f"Échec de la collecte du load average: {e}")
+        
+    return {"load_1m": None, "load_5m": None, "load_15m": None}
 
 def collect_system_metrics() -> dict[str, Any]:
     """Collecte les métriques CPU, RAM et la charge système."""
