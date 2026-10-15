@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      target: api
+    container_name: metrics-api
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    # AJOUT ICI
+    environment:
+      - PYTHONPATH=/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  agent:
+    build:
+      context: .
+      target: agent
+    container_name: metrics-agent
+    env_file:
+      - .env
+    # AJOUT ICI
+    environment:
+      - PYTHONPATH=/app
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
